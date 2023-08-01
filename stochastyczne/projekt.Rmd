@@ -1,0 +1,136 @@
+---
+title: "Projekt"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Przygotowanie
+
+## Wczytanie bibliotek
+
+Pierwsze trzeba się upewnić, czy wszystkie potrzebne biblioteki są zainstalowane i wczytane.
+
+```{r}
+#install.packages("aTSA")
+install.packages("forecast")
+library('aTSA')
+library('forecast')
+
+```
+
+## Wczytanie danych
+
+Czas wczytać dane. Jest to rzeczywisty produkt krajowy brutto na mieszkańca USA.Zapiszmy od razu je jako szereg czasowy.
+
+```{r}
+data=read.csv('A939RX0Q048SBEA.csv')
+data=ts(data$VALUE,frequency = 4)
+```
+
+Teraz pora na przyjrzenie się danym.
+
+```{r}
+eda<-c(min(data),max(data),max(data)-min(data),mean(data),is.null(data))
+names(eda)<-c('Min ','Max ','Max-Min ','Średnia ',' Ile null')
+(eda)
+head(data,n=8)
+tail(data,n=8)
+```
+
+Wygląda na to, że wszystko wczytało się poprawnie. Nie występują brakujące wartości. Przejdźmy więc do główniej części.
+
+# Główna część
+
+## Badanie oryginalnego szeregu
+
+```{r}
+plot(data)
+```
+
+Możemy zauważyć wyraźny tręd. Spróbujmy jednk rozbić ten szereg na poszcze składowe.
+
+```{r}
+plot(decompose((data)))
+```
+
+Faktycznie występuje tutaj tręd. Można zauważyć również, że występuje sezonowość. Interesujący jest silny spadek oraz wzrost do standardowych poziomów pod koniec obserwacji. Odpowiada za niego COVID-19 oraz polityka rządów w związku z ego rzprzesrzenianiem się.
+
+Sprawdźmy funkcje autokorelacji i autokorelacji cząstkowej
+
+```{r}
+acf(data)
+pacf(data)
+```
+
+oraz test na stacjonarność szeregu.
+
+```{r}
+adf.test(data)
+```
+
+W każdym wypadku p-value jest zdecydowanie większe niż 0.05 wię nie mamy przesłanek za odrzuceniem hipotezy zerowej. W takim przypadku przyjmimy, że szereg nie jest stacjonarny. Co jednak będzie jeśli go zróżnicujemy?
+
+## Różnicowanie szeregu
+
+```{r}
+data_dif<-diff(data,1)
+```
+
+Analogicznie sprawdźmy, czy nic się nie zepsuło w danych.
+
+```{r}
+eda<-c(min(data_dif),max(data_dif),max(data_dif)-min(data_dif),mean(data_dif),is.null(data_dif))
+names(eda)<-c('Min ','Max ','Max-Min ','Średnia ',' Ile null')
+(eda)
+head(data_dif,n=8)
+tail(data_dif,n=8)
+```
+
+Wszystko wygląda dobrze. Rozłóżmy więc szereg na czynniki.
+
+```{r}
+plot(decompose(data_dif))
+```
+
+Jest on teraz zdecydowanie bardziej wypłaszczony. Możliwe, że w takiej formie okaże się stacjonarny.
+
+Sprawdźmy funkcje autokorelacji i autokorelacji cząstkowej
+
+```{r}
+acf(data_dif)
+pacf(data_dif)
+```
+
+oraz stacjonarność
+
+```{r}
+adf.test(data_dif)
+```
+
+W każdym wypadku zaobserwowane p-value pozwala nam przyjąć hipotezę alternatywną. Uznajemy więc że szereg ten jest stacjonarny po jednokrotnym zróżnicowaniu.
+
+## Przyporządkowanie Arimy i prognozowanie
+
+Spróbujmy przyporządkować model Arima do naszych danych
+
+```{r}
+fit<-auto.arima(data,)
+fit
+
+```
+
+```{r}
+checkresiduals(fit)
+shapiro.test(fit$residuals)
+```
+
+Niestety wychodzi nam, że nie mają one rozkładu normalnego (nie można ich traktować jak biały szum). W takim przypadku nim dozwolone byłoby prognozowanie, musielibyśmy ręcznie dopasować lepszy model. Widzimy jednak, że najprawdopodobniej przyczynami błędów są dane z okresu około COVIDowego.Najprawdopodobniej obróbka danych tak, żeby brać obserwacje wpadające w przedział ufności (te, które nie pasują zmienić odpowiednio na górne albo dolne ograniczenie przedziału) poprawiłaby wyniki. Uznajmy więc jednak, że na potrzeby projektu ten jest dość dobry.
+
+Prognoza modelu w naszej dotychczasowej formie wygąda następująco.
+
+```{r}
+plot(predict(fit$fitted,h=30))
+```
+
